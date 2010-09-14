@@ -108,10 +108,14 @@ static int pysignalfd_init(void)
 	if (pid > 0)
 		pysignalfd_parent(fd, pid);
 
-	if (sigfillset(&set) < 0) {
-		perror("sigfillset");
-		goto no_fill;
-	}
+	sigfillset(&set);
+	sigdelset(&set, SIGABRT);
+	sigdelset(&set, SIGBUS);
+	sigdelset(&set, SIGCHLD);
+	sigdelset(&set, SIGILL);
+	sigdelset(&set, SIGKILL);
+	sigdelset(&set, SIGSEGV);
+	sigdelset(&set, SIGSTOP);
 
 	if (sigprocmask(SIG_SETMASK, &set, NULL) < 0) {
 		perror("sigprocmask");
@@ -124,7 +128,6 @@ static int pysignalfd_init(void)
 	return 0;
 
 no_mask:
-no_fill:
 no_fork:
 	close(fd[0]);
 	close(fd[1]);
