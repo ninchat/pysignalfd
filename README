@@ -1,7 +1,6 @@
 import os
 import select
 import signal
-import struct
 
 import signalfd
 
@@ -14,6 +13,6 @@ while 1:
 		if not buf:
 			break
 
-		sig, = struct.unpack("B", buf)
+		sig = ord(buf[0])
 		if sig == signal.SIGTERM:
 			break
