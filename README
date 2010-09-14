@@ -1,0 +1,19 @@
+import os
+import select
+import signal
+import struct
+
+import signalfd
+
+fd = signalfd.get_fd()
+
+while 1:
+	r, w, x = select.select([fd], [], [])
+	if r:
+		buf = os.read(fd, 1)
+		if not buf:
+			break
+
+		sig, = struct.unpack("B", buf)
+		if sig == signal.SIGTERM:
+			break
