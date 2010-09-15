@@ -25,38 +25,35 @@
 
 #include <Python.h>
 
-#include <errno.h>
 #include <signal.h>
-#include <stdbool.h>
 #include <stddef.h>
-#include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <sys/wait.h>
 
-static int pysignalfd_read_fd = -1;
-static int pysignalfd_write_fd = -1;
+static int pysignalfd_pipe[2] = { -1, -1 };
 
-static void pysignalfd_handler(int num)
+static void pysignalfd_handler(int signum)
 {
-	char buf = num;
+	char buf = signum;
 
-	if (write(pysignalfd_write_fd, &buf, 1) < 0)
-		perror("write");
+	if (write(pysignalfd_pipe[1], &buf, 1) < 0)
+		;
 }
 
-static void pysignalfd_parent(int fd[2], pid_t pid)
+static PyObject *pysignalfd_init(PyObject *self, PyObject *args)
 {
-	int num;
+	int i;
+	struct sigaction action = {
+		.sa_flags = SA_NOCLDSTOP | SA_RESTART,
+	};
 
-	close(fd[0]);
-	pysignalfd_write_fd = fd[1];
+	if (pipe(pysignalfd_pipe) < 0)
+		return NULL;
 
-	for (num = 1; num < 32; num++)
-		switch (num) {
+	for (i = 1; i < 32; i++)
+		switch (i) {
 		case SIGABRT:
 		case SIGBUS:
-		case SIGCHLD:
 		case SIGILL:
 		case SIGKILL:
 		case SIGSEGV:
@@ -64,84 +61,50 @@ static void pysignalfd_parent(int fd[2], pid_t pid)
 			break;
 
 		case SIGPIPE:
-			if (signal(num, SIG_IGN) == SIG_ERR)
-				perror("signal");
+			action.sa_handler = SIG_IGN;
+			sigaction(i, &action, NULL);
 			break;
 
 		default:
-			if (signal(num, pysignalfd_handler) == SIG_ERR)
-				perror("signal");
+			action.sa_handler = pysignalfd_handler;
+			sigaction(i, &action, NULL);
 			break;
 		}
 
-	while (true) {
-		int status;
+	return PyLong_FromLong(pysignalfd_pipe[0]);
+}
 
-		if (waitpid(pid, &status, 0) < 0) {
-			if (errno == EINTR)
-				continue;
+static PyObject *pysignalfd_reset(PyObject *self, PyObject *args)
+{
+	int i;
 
-			abort();
+	for (i = 1; i < 32; i++)
+		switch (i) {
+		case SIGABRT:
+		case SIGBUS:
+		case SIGILL:
+		case SIGKILL:
+		case SIGSEGV:
+		case SIGSTOP:
+			break;
+
+		default:
+			signal(i, SIG_DFL);
+			break;
 		}
 
-		_exit(status);
-	}
-}
-
-static int pysignalfd_init(void)
-{
-	int fd[2];
-	pid_t pid;
-	sigset_t set;
-
-	if (pipe(fd) < 0) {
-		perror("pipe");
-		goto no_pipe;
+	for (i = 0; i < 2; i++) {
+		close(pysignalfd_pipe[i]);
+		pysignalfd_pipe[i] = -1;
 	}
 
-	pid = fork();
-	if (pid < 0) {
-		perror("fork");
-		goto no_fork;
-	}
-
-	if (pid > 0)
-		pysignalfd_parent(fd, pid);
-
-	sigfillset(&set);
-	sigdelset(&set, SIGABRT);
-	sigdelset(&set, SIGBUS);
-	sigdelset(&set, SIGCHLD);
-	sigdelset(&set, SIGILL);
-	sigdelset(&set, SIGKILL);
-	sigdelset(&set, SIGSEGV);
-	sigdelset(&set, SIGSTOP);
-
-	if (sigprocmask(SIG_SETMASK, &set, NULL) < 0) {
-		perror("sigprocmask");
-		goto no_mask;
-	}
-
-	pysignalfd_read_fd = fd[0];
-	close(fd[1]);
-
-	return 0;
-
-no_mask:
-no_fork:
-	close(fd[0]);
-	close(fd[1]);
-no_pipe:
-	return -1;
-}
-
-static PyObject *pysignalfd_get_fd(PyObject *self, PyObject *args)
-{
-	return PyLong_FromLong(pysignalfd_read_fd);
+	Py_INCREF(Py_None);
+	return Py_None;
 }
 
 static PyMethodDef pysignalfd_methods[] = {
-	{ "get_fd", pysignalfd_get_fd, METH_NOARGS, NULL },
+	{ "init", pysignalfd_init, METH_NOARGS, NULL },
+	{ "reset", pysignalfd_reset, METH_NOARGS, NULL },
 	{ NULL, NULL, 0, NULL }
 };
 
@@ -149,9 +112,6 @@ static PyMethodDef pysignalfd_methods[] = {
 
 PyMODINIT_FUNC initsignalfd(void)
 {
-	if (pysignalfd_init() < 0)
-		return;
-
 	Py_InitModule("signalfd", pysignalfd_methods);
 }
 
@@ -167,9 +127,6 @@ static struct PyModuleDef pysignalfd_module = {
 
 PyMODINIT_FUNC PyInit_signalfd(void)
 {
-	if (pysignalfd_init() < 0)
-		return NULL;
-
 	return PyModule_Create(&pysignalfd_module);
 }
 

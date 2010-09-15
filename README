@@ -1,13 +1,20 @@
+import errno
 import os
 import select
 import signal
 
 import signalfd
 
-fd = signalfd.get_fd()
+fd = signalfd.init()
 
 while 1:
-	r, w, x = select.select([fd], [], [])
+	try:
+		r, w, x = select.select([fd], [], [])
+	except select.error as e:
+		if e.args[0] == errno.EINTR:
+			continue
+		raise
+
 	if r:
 		buf = os.read(fd, 1)
 		if not buf:
