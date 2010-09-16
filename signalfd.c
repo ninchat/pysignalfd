@@ -93,10 +93,11 @@ static PyObject *pysignalfd_reset(PyObject *self, PyObject *args)
 			break;
 		}
 
-	for (i = 0; i < 2; i++) {
-		close(pysignalfd_pipe[i]);
-		pysignalfd_pipe[i] = -1;
-	}
+	for (i = 0; i < 2; i++)
+		if (pysignalfd_pipe[i] >= 0) {
+			close(pysignalfd_pipe[i]);
+			pysignalfd_pipe[i] = -1;
+		}
 
 	Py_INCREF(Py_None);
 	return Py_None;
