@@ -111,22 +111,22 @@ static PyMethodDef pysignalfd_methods[] = {
 
 #if PY_MAJOR_VERSION < 3
 
-PyMODINIT_FUNC initsignalfd(void)
+PyMODINIT_FUNC init_signalfd(void)
 {
-	Py_InitModule("signalfd", pysignalfd_methods);
+	Py_InitModule("_signalfd", pysignalfd_methods);
 }
 
 #else
 
 static struct PyModuleDef pysignalfd_module = {
 	PyModuleDef_HEAD_INIT,
-	"signalfd",
+	"_signalfd",
 	NULL,
 	-1,
 	pysignalfd_methods,
 };
 
-PyMODINIT_FUNC PyInit_signalfd(void)
+PyMODINIT_FUNC PyInit__signalfd(void)
 {
 	return PyModule_Create(&pysignalfd_module);
 }

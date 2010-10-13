@@ -1,11 +1,12 @@
 import distutils.core
 
 ext = distutils.core.Extension(
-	"signalfd",
-	sources = ["signalfd.c"],
+	"_signalfd",
+	sources = ["_signalfd.c"],
 )
 
 distutils.core.setup(
 	name = "pysignalfd",
+	py_modules = ["signalfd"],
 	ext_modules = [ext],
 )
