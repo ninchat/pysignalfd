@@ -7,6 +7,6 @@ ext = distutils.core.Extension(
 
 distutils.core.setup(
 	name = "pysignalfd",
-	py_modules = ["signalfd"],
+	packages = ["signalfd"],
 	ext_modules = [ext],
 )

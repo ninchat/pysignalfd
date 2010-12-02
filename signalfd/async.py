@@ -1,18 +1,16 @@
 __all__ = [
-	"init",
-	"reset",
-	"signal_dispatcher",
+	"dispatcher",
 ]
 
 import asyncore
 import signal
 
-from _signalfd import *
+import signalfd
 
-class signal_dispatcher(asyncore.file_dispatcher):
+class dispatcher(asyncore.file_dispatcher):
 
 	def __init__(self):
-		fd = init()
+		fd = signalfd.init()
 		asyncore.file_dispatcher.__init__(self, fd)
 
 	def writable(self):
@@ -36,4 +34,4 @@ class signal_dispatcher(asyncore.file_dispatcher):
 
 	def handle_close(self):
 		self.close()
-		reset()
+		signalfd.reset()
