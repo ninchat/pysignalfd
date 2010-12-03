@@ -9,9 +9,9 @@ import signalfd
 
 class dispatcher(asyncore.file_dispatcher):
 
-	def __init__(self):
+	def __init__(self, map=None):
 		fd = signalfd.init()
-		asyncore.file_dispatcher.__init__(self, fd)
+		asyncore.file_dispatcher.__init__(self, fd, map)
 
 	def writable(self):
 		return False
