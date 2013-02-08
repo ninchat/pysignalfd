@@ -26,6 +26,7 @@
 
 #include <Python.h>
 
+#include <errno.h>
 #include <signal.h>
 #include <stddef.h>
 #include <unistd.h>
@@ -35,10 +36,13 @@ static int pysignalfd_pipe[2] = { -1, -1 };
 
 static void pysignalfd_handler(int signum)
 {
+	int saved_errno = errno;
 	char buf = signum;
 
-	if (write(pysignalfd_pipe[1], &buf, 1) < 0)
-		;
+	if (write(pysignalfd_pipe[1], &buf, 1) < 0) {
+	}
+
+	errno = saved_errno;
 }
 
 static PyObject *pysignalfd_init(PyObject *self, PyObject *args)
