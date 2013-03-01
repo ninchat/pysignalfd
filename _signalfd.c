@@ -39,7 +39,8 @@ static void pysignalfd_handler(int signum)
 	int saved_errno = errno;
 	char buf = signum;
 
-	if (write(pysignalfd_pipe[1], &buf, 1) < 0) {
+	while (write(pysignalfd_pipe[1], &buf, 1) < 0 &&
+	       errno == EINTR) {
 	}
 
 	errno = saved_errno;
