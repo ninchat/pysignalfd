@@ -1,5 +1,4 @@
 import errno
-import os
 import select
 import signal
 
@@ -15,15 +14,5 @@ while 1:
 			continue
 		raise
 
-	if r:
-		buf = os.read(fd, 1)
-		if not buf:
-			break
-
-		if isinstance(buf, str):
-			sig = ord(buf[0])  # Python 2
-		else:
-			sig, = buf         # Python 3
-
-		if sig == signal.SIGTERM:
-			break
+	if r and signalfd.read() == signal.SIGTERM:
+		break

@@ -17,16 +17,15 @@ class dispatcher(asyncore.file_dispatcher):
 		return False
 
 	def handle_read(self):
-		data = self.recv(1)
-		if data:
-			if isinstance(data, str):
-				signum = ord(data[0])
-			else:
-				signum = data[0]
-
-			self.handle_signal(signum)
-		else:
-			self.handle_close()
+		fail = True
+		try:
+			signum = signalfd.read()
+			if signum > 0:
+				self.handle_signal(signum)
+			fail = False
+		finally:
+			if fail:
+				self.handle_close()
 
 	def handle_signal(self, signum):
 		if signum == signal.SIGINT:

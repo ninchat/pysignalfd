@@ -26,71 +26,47 @@
 
 #include <Python.h>
 
-#include <errno.h>
 #include <signal.h>
 #include <stddef.h>
 #include <unistd.h>
+#include <sys/signalfd.h>
 #include <sys/types.h>
 
-static int pysignalfd_pipe[2] = { -1, -1 };
-
-static void pysignalfd_handler(int signum)
-{
-	int saved_errno = errno;
-	char buf = signum;
-
-	if (write(pysignalfd_pipe[1], &buf, 1) < 0) {
-	}
-
-	errno = saved_errno;
-}
+static int pysignalfd_fd = -1;
 
 static void pysignalfd_close(void)
 {
-	int i;
-
-	for (i = 1; i < 32; i++) {
-		switch (i) {
-		case SIGABRT:
-		case SIGBUS:
-		case SIGFPE:
-		case SIGILL:
-		case SIGKILL:
-		case SIGSEGV:
-		case SIGSTOP:
-			break;
-
-		default:
-			signal(i, SIG_DFL);
-			break;
-		}
+	if (pysignalfd_fd >= 0) {
+		close(pysignalfd_fd);
+		pysignalfd_fd = -1;
 	}
+}
 
-	for (i = 0; i < 2; i++) {
-		if (pysignalfd_pipe[i] >= 0) {
-			close(pysignalfd_pipe[i]);
-			pysignalfd_pipe[i] = -1;
-		}
-	}
+static int pysignalfd_fill_and_mask(sigset_t *set)
+{
+	if (sigfillset(set) < 0)
+		return -1;
+
+	if (sigdelset(set, SIGABRT) < 0 ||
+	    sigdelset(set, SIGBUS) < 0 ||
+	    sigdelset(set, SIGFPE) < 0 ||
+	    sigdelset(set, SIGILL) < 0 ||
+	    sigdelset(set, SIGKILL) < 0 ||
+	    sigdelset(set, SIGSEGV) < 0 ||
+	    sigdelset(set, SIGSTOP) < 0)
+		return -1;
+
+	if (pthread_sigmask(SIG_SETMASK, set, NULL) < 0)
+		return -1;
+
+	return 0;
 }
 
 static PyObject *pysignalfd_mask(PyObject *self, PyObject *args)
 {
 	sigset_t set;
 
-	if (sigfillset(&set) < 0)
-		return NULL;
-
-	if (sigdelset(&set, SIGABRT) < 0 ||
-	    sigdelset(&set, SIGBUS) < 0 ||
-	    sigdelset(&set, SIGFPE) < 0 ||
-	    sigdelset(&set, SIGILL) < 0 ||
-	    sigdelset(&set, SIGKILL) < 0 ||
-	    sigdelset(&set, SIGSEGV) < 0 ||
-	    sigdelset(&set, SIGSTOP) < 0)
-		return NULL;
-
-	if (pthread_sigmask(SIG_SETMASK, &set, NULL) < 0)
+	if (pysignalfd_fill_and_mask(&set) < 0)
 		return NULL;
 
 	Py_INCREF(Py_None);
@@ -99,45 +75,38 @@ static PyObject *pysignalfd_mask(PyObject *self, PyObject *args)
 
 static PyObject *pysignalfd_init(PyObject *self, PyObject *args)
 {
-	int i;
 	sigset_t set;
-	struct sigaction action = {
-		.sa_flags = SA_NOCLDSTOP | SA_RESTART,
-	};
 
 	pysignalfd_close();
 
-	if (pipe(pysignalfd_pipe) < 0)
+	if (pysignalfd_fill_and_mask(&set) < 0)
 		return NULL;
 
-	for (i = 1; i < 32; i++)
-		switch (i) {
-		case SIGABRT:
-		case SIGBUS:
-		case SIGILL:
-		case SIGKILL:
-		case SIGSEGV:
-		case SIGSTOP:
-			break;
-
-		case SIGPIPE:
-			action.sa_handler = SIG_IGN;
-			sigaction(i, &action, NULL);
-			break;
-
-		default:
-			action.sa_handler = pysignalfd_handler;
-			sigaction(i, &action, NULL);
-			break;
-		}
-
-	if (sigemptyset(&set) < 0)
+	pysignalfd_fd = signalfd(-1, &set, SFD_NONBLOCK | SFD_CLOEXEC);
+	if (pysignalfd_fd < 0)
 		return NULL;
 
-	if (pthread_sigmask(SIG_SETMASK, &set, NULL) < 0)
+	return PyLong_FromLong(pysignalfd_fd);
+}
+
+static PyObject *pysignalfd_read(PyObject *self, PyObject *args)
+{
+	struct signalfd_siginfo buf;
+	int signo = 0;
+	ssize_t len;
+
+	if (pysignalfd_fd < 0)
 		return NULL;
 
-	return PyLong_FromLong(pysignalfd_pipe[0]);
+	len = read(pysignalfd_fd, &buf, sizeof (buf));
+
+	if (len < 0 && (errno != EAGAIN && errno != EINTR))
+		return NULL;
+
+	if (len >= 0 && (size_t) len >= sizeof (buf))
+		signo = buf.ssi_signo;
+
+	return PyLong_FromLong(signo);
 }
 
 static PyObject *pysignalfd_reset(PyObject *self, PyObject *args)
@@ -159,6 +128,7 @@ static PyObject *pysignalfd_reset(PyObject *self, PyObject *args)
 static PyMethodDef pysignalfd_methods[] = {
 	{ "init", pysignalfd_init, METH_NOARGS, NULL },
 	{ "mask", pysignalfd_mask, METH_NOARGS, NULL },
+	{ "read", pysignalfd_read, METH_NOARGS, NULL },
 	{ "reset", pysignalfd_reset, METH_NOARGS, NULL },
 	{ NULL, NULL, 0, NULL }
 };
