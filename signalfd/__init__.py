@@ -1,5 +1,6 @@
 __all__ = [
 	"init",
+	"mask",
 	"reset",
 ]
 
