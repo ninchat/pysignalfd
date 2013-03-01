@@ -26,11 +26,17 @@
 
 #include <Python.h>
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <errno.h>
 #include <signal.h>
 #include <stddef.h>
-#include <unistd.h>
+
 #include <sys/types.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 static pid_t pysignalfd_pid = 0;
 static int pysignalfd_pipe[2] = { -1, -1 };
@@ -112,7 +118,7 @@ static PyObject *pysignalfd_init(PyObject *self, PyObject *args)
 
 	pysignalfd_close();
 
-	if (pipe(pysignalfd_pipe) < 0)
+	if (pipe2(pysignalfd_pipe, O_CLOEXEC) < 0)
 		return NULL;
 
 	for (i = 1; i < 32; i++)
