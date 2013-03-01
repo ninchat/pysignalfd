@@ -46,12 +46,67 @@ static void pysignalfd_handler(int signum)
 	errno = saved_errno;
 }
 
+static void pysignalfd_close(void)
+{
+	int i;
+
+	for (i = 1; i < 32; i++) {
+		switch (i) {
+		case SIGABRT:
+		case SIGBUS:
+		case SIGFPE:
+		case SIGILL:
+		case SIGKILL:
+		case SIGSEGV:
+		case SIGSTOP:
+			break;
+
+		default:
+			signal(i, SIG_DFL);
+			break;
+		}
+	}
+
+	for (i = 0; i < 2; i++) {
+		if (pysignalfd_pipe[i] >= 0) {
+			close(pysignalfd_pipe[i]);
+			pysignalfd_pipe[i] = -1;
+		}
+	}
+}
+
+static PyObject *pysignalfd_mask(PyObject *self, PyObject *args)
+{
+	sigset_t set;
+
+	if (sigfillset(&set) < 0)
+		return NULL;
+
+	if (sigdelset(&set, SIGABRT) < 0 ||
+	    sigdelset(&set, SIGBUS) < 0 ||
+	    sigdelset(&set, SIGFPE) < 0 ||
+	    sigdelset(&set, SIGILL) < 0 ||
+	    sigdelset(&set, SIGKILL) < 0 ||
+	    sigdelset(&set, SIGSEGV) < 0 ||
+	    sigdelset(&set, SIGSTOP) < 0)
+		return NULL;
+
+	if (pthread_sigmask(SIG_SETMASK, &set, NULL) < 0)
+		return NULL;
+
+	Py_INCREF(Py_None);
+	return Py_None;
+}
+
 static PyObject *pysignalfd_init(PyObject *self, PyObject *args)
 {
 	int i;
+	sigset_t set;
 	struct sigaction action = {
 		.sa_flags = SA_NOCLDSTOP | SA_RESTART,
 	};
+
+	pysignalfd_close();
 
 	if (pipe(pysignalfd_pipe) < 0)
 		return NULL;
@@ -77,33 +132,26 @@ static PyObject *pysignalfd_init(PyObject *self, PyObject *args)
 			break;
 		}
 
+	if (sigemptyset(&set) < 0)
+		return NULL;
+
+	if (pthread_sigmask(SIG_SETMASK, &set, NULL) < 0)
+		return NULL;
+
 	return PyLong_FromLong(pysignalfd_pipe[0]);
 }
 
 static PyObject *pysignalfd_reset(PyObject *self, PyObject *args)
 {
-	int i;
+	sigset_t set;
 
-	for (i = 1; i < 32; i++)
-		switch (i) {
-		case SIGABRT:
-		case SIGBUS:
-		case SIGILL:
-		case SIGKILL:
-		case SIGSEGV:
-		case SIGSTOP:
-			break;
+	pysignalfd_close();
 
-		default:
-			signal(i, SIG_DFL);
-			break;
-		}
+	if (sigemptyset(&set) < 0)
+		return NULL;
 
-	for (i = 0; i < 2; i++)
-		if (pysignalfd_pipe[i] >= 0) {
-			close(pysignalfd_pipe[i]);
-			pysignalfd_pipe[i] = -1;
-		}
+	if (pthread_sigmask(SIG_SETMASK, &set, NULL) < 0)
+		return NULL;
 
 	Py_INCREF(Py_None);
 	return Py_None;
@@ -111,6 +159,7 @@ static PyObject *pysignalfd_reset(PyObject *self, PyObject *args)
 
 static PyMethodDef pysignalfd_methods[] = {
 	{ "init", pysignalfd_init, METH_NOARGS, NULL },
+	{ "mask", pysignalfd_mask, METH_NOARGS, NULL },
 	{ "reset", pysignalfd_reset, METH_NOARGS, NULL },
 	{ NULL, NULL, 0, NULL }
 };
