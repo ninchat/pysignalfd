@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 
+static pid_t pysignalfd_pid = 0;
 static int pysignalfd_pipe[2] = { -1, -1 };
 
 static void pysignalfd_handler(int signum)
@@ -39,7 +40,8 @@ static void pysignalfd_handler(int signum)
 	int saved_errno = errno;
 	char buf = signum;
 
-	while (write(pysignalfd_pipe[1], &buf, 1) < 0 &&
+	while (getpid() == pysignalfd_pid &&
+	       write(pysignalfd_pipe[1], &buf, 1) < 0 &&
 	       errno == EINTR) {
 	}
 
@@ -49,6 +51,8 @@ static void pysignalfd_handler(int signum)
 static void pysignalfd_close(void)
 {
 	int i;
+
+	pysignalfd_pid = 0;
 
 	for (i = 1; i < 32; i++) {
 		switch (i) {
@@ -131,6 +135,8 @@ static PyObject *pysignalfd_init(PyObject *self, PyObject *args)
 			sigaction(i, &action, NULL);
 			break;
 		}
+
+	pysignalfd_pid = getpid();
 
 	if (sigemptyset(&set) < 0)
 		return NULL;
