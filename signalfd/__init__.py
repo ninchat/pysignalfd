@@ -13,6 +13,9 @@ import signal
 
 from _signalfd import *
 
+def identity(signum):
+	return signum
+
 def iterate():
 	fd = init()
 
@@ -38,6 +41,3 @@ def enqueue(queue, wrapper=identity, terminator=StopIteration):
 			queue.put(wrapper(signum))
 	finally:
 		queue.put(terminator)
-
-def identity(signum):
-	return signum
